@@ -11,7 +11,7 @@ export default function Citizen() {
     const [myIssuesFilter, setMyIssuesFilter] = useState('all');
     const [issues, setIssues] = useState([]);
     const [selectedIssue, setSelectedIssue] = useState(null);
-const [openResponses, setOpenResponses] = useState(false);
+    const [openResponses, setOpenResponses] = useState(false);
     // Data state
     const [announcements, setAnnouncements] = useState([]);
     const [openCommentsId, setOpenCommentsId] = useState(null);
@@ -27,6 +27,11 @@ const [openResponses, setOpenResponses] = useState(false);
     const [profName, setProfName] = useState(currentUser?.name || '');
     const [profEmail, setProfEmail] = useState(currentUser?.email || '');
     const [profConst, setProfConst] = useState(currentUser?.constituency || '');
+    const [profWard, setProfWard] = useState(currentUser?.wardNumber || '');
+    const [profStreet, setProfStreet] = useState(currentUser?.street || '');
+    const [profDistrict, setProfDistrict] = useState(currentUser?.district || '');
+    const [profState, setProfState] = useState(currentUser?.state || '');
+    const [profPassword, setProfPassword] = useState('');
     const [profPass, setProfPass] = useState('');
     const [comments, setComments] = useState([]);
     const [commentText, setCommentText] = useState('');
@@ -40,7 +45,6 @@ const [openResponses, setOpenResponses] = useState(false);
     showToast('Please fill all fields.', 'error');
     return;
   }
-
   const issue = {
     title: repTitle.trim(),
     category: repCat,
@@ -52,11 +56,12 @@ const [openResponses, setOpenResponses] = useState(false);
     constituency: currentUser.constituency || 'General',
     status: 'pending',   // 🔥 IMPORTANT
     votes: 0,
-    flagged: false
+    flagged: false,
+    timestamp: new Date().toISOString()
   };
 
   try {
-    const res = await fetch("http://localhost:3103/issues", {
+    const res = await fetch("https://backendfullstack-production.up.railway.app/issues", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -92,7 +97,7 @@ const selectedResponses = selectedIssue
   : [];
   
 const fetchResponses = async () => {
-    const res = await fetch("http://localhost:3103/responses");
+    const res = await fetch("https://backendfullstack-production.up.railway.app/responses");
     const data = await res.json();
     setResponses(Array.isArray(data)? data :[]);
 };
@@ -107,7 +112,7 @@ useEffect(() => {
 }, []);
 const fetchComments = async (id) => {
   try {
-    const res = await fetch(`http://localhost:3103/comments/${id}`);
+    const res = await fetch(`https://backendfullstack-production.up.railway.app/comments/${id}`);
     const data = await res.json();
 
     setComments(data || []);
@@ -121,7 +126,7 @@ const addComment = async () => {
   if (!commentText.trim()) return;
 
   try {
-    await fetch("http://localhost:3103/comments", {
+    await fetch("https://backendfullstack-production.up.railway.app/comments", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -143,7 +148,7 @@ const addComment = async () => {
 const fetchWardAnnouncements = async () => {
   try {
     const res = await fetch(
-      `http://localhost:3103/announcements/ward?wardNumber=${currentUser.wardNumber}`
+      `https://backendfullstack-production.up.railway.app/announcements/ward?wardNumber=${currentUser.wardNumber}`
     );
 
     const data = await res.json();
@@ -158,7 +163,7 @@ const fetchWardAnnouncements = async () => {
 
     const fetchAnnouncements = async () => {
   try {
-    const res = await fetch("http://localhost:3103/announcements");
+    const res = await fetch("https://backendfullstack-production.up.railway.app/announcements");
     const data = await res.json();
     setAnnouncements(data || []);
   } catch (err) {
@@ -180,45 +185,56 @@ useEffect(() => {
 
   return () => clearInterval(interval);
 }, []);
-    const saveProfile = async (e) => {
-    e.preventDefault();
-
-    const patch = {
-        name: profName.trim(),
-        email: profEmail.trim(),
-        constituency: profConst.trim()
+const saveProfile = async () => {
+  try {
+    const bodyData = {
+      name: profName,
+      street: profStreet,
+      district: profDistrict,
+      state: profState,
+      wardNumber: profWard ? Number(profWard) : null
     };
 
-    if (profPass) patch.password = profPass;
-
-    try {
-        const res = await fetch(`http://localhost:3103/users/${currentUser.id}`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(patch)
-        });
-
-        const updatedUser = await res.json();
-        setCurrentUser(updatedUser);
-
-        showToast('Profile updated successfully!', 'success');
-
-    } catch (err) {
-        console.error(err);
+    // 🔥 ONLY send password if user typed it
+    if (profPass && profPass.trim() !== "") {
+      bodyData.password = profPass;
     }
-};
-const likeAnn = async (id) => {
-    try {
-        await fetch(`http://localhost:3103/announcements/${id}/like`, {
-            method: "PUT"
-        });
 
-        fetchWardAnnouncements();
-    } catch (err) {
-        console.error(err);
+    const res = await fetch(
+      `https://backendfullstack-production.up.railway.app/auth/users/${currentUser.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(bodyData)
+      }
+    );
+
+    const data = await res.json();
+
+    console.log("UPDATE RESPONSE:", data); // 🔍 DEBUG
+
+    if (!res.ok) {
+      alert(data.message || "Update failed ❌");
+      return;
     }
+
+    // update state
+    const updatedUser = {
+      ...currentUser,
+      ...data
+    };
+
+    setCurrentUser(updatedUser);
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+
+    alert("Profile updated ✅");
+
+  } catch (err) {
+    console.error(err);
+    alert("Server error ❌");
+  }
 };
     const navLinks = [
         { type: 'label', label: 'My Activity' },
@@ -238,7 +254,7 @@ const likeAnn = async (id) => {
 // ✅ 1. define functions FIRST
 const fetchIssues = async () => {
     try {
-        const res = await fetch(`http://localhost:3103/issues/user?userId=${currentUser.id}`);
+        const res = await fetch(`https://backendfullstack-production.up.railway.app/issues/user?userId=${currentUser.id}`);
         const data = await res.json();
         setIssues(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -291,12 +307,20 @@ useEffect(() => {
                                             <div className="ann-politician">{a.politicianName}</div>
                                             <div className="ann-constituency">📍 {a.constituency || 'All Wards'}</div>
                                         </div>
-                                        <small style={{ marginLeft: 'auto' }}>{timeAgo(a.createdAt)}</small>
+                                        <small style={{ marginLeft: 'auto' }}>{new Date(a.timestamp).toLocaleString("en-IN")}</small>
                                     </div>
                                     <div className="ann-title">{a.title}</div>
                                     <div className="ann-content">{a.content}</div>
                                     
                                     <div className="ann-actions">
+
+                                    <button
+                                        className="btn btn-secondary btn-sm"
+                                        onClick={() => likeAnn(a.id)}
+                                    >
+                                        👍 {a.likes || 0}
+                                    </button>
+
                                     </div>
                                 </div>
                             ))
@@ -404,18 +428,27 @@ useEffect(() => {
                         </div>
                     </div>
                     <div className="card" style={{ maxWidth: '500px' }}>
-                        <form onSubmit={saveProfile}>
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            saveProfile();
+                            }}>
                             <div className="form-group">
                                 <label className="form-label">Full Name</label>
                                 <input className="form-control" value={profName} onChange={e => setProfName(e.target.value)} />
                             </div>
                             <div className="form-group">
                                 <label className="form-label">Email</label>
-                                <input type="email" className="form-control" value={profEmail} onChange={e => setProfEmail(e.target.value)} />
+                               <input
+  type="email"
+  className="form-control"
+  value={profEmail}
+  disabled
+  onChange={e => setProfEmail(e.target.value)}
+/>
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Constituency / Ward</label>
-                                <input className="form-control" placeholder="e.g. North Ward" value={profConst} onChange={e => setProfConst(e.target.value)} />
+                                <label className="form-label">Ward</label>
+                                <input className="form-control" placeholder="e.g. North Ward" value={profWard} onChange={e => setProfWard(e.target.value)} />
                             </div>
                             <div className="form-group">
                                 <label className="form-label">New Password <small style={{ color: 'var(--text-muted)', textTransform: 'none' }}>(leave blank to keep current)</small></label>

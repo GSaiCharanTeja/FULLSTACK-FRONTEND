@@ -1597,3 +1597,42 @@ tbody tr:hover {
   color: #f87171;
 
 }
+.response-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.response-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.form-control {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+input:disabled {
+  background-color:#080a10;
+  cursor: not-allowed;
+}

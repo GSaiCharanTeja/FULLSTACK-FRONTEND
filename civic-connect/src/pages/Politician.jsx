@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { showToast } from '../utils/toast';
 import { getStatusBadgeData, getCatIcon, getCatClass } from '../utils/helpers';
 import { timeAgo, formatDate,} from '../utils/data';
+import { useNavigate } from "react-router-dom";
 export default function Politician() {
     const { currentUser, setCurrentUser } = useAuth();
     const [activeSection, setActiveSection] = useState('inbox'); 
@@ -30,14 +31,22 @@ export default function Politician() {
     const [profEmail, setProfEmail] = useState(currentUser?.email || '');
     const [profConst, setProfConst] = useState(currentUser?.constituency || '');
     const [profPass, setProfPass] = useState('');
+    const [profWard, setProfWard] = useState(currentUser?.wardNumber || '');
+  const [profStreet, setProfStreet] = useState(currentUser?.street || '');
+  const [profDistrict, setProfDistrict] = useState(currentUser?.district || '');
+  const [profState, setProfState] = useState(currentUser?.state || '');
 
 
     useEffect(() => {
-        refreshData();
-        const handleUpdate = () => refreshData();
-        window.addEventListener('local-storage-update', handleUpdate);
-        return () => window.removeEventListener('local-storage-update', handleUpdate);
-    }, [currentUser.id, currentUser.constituency]);
+    if (!currentUser?.id) return;
+
+    refreshData();
+
+    const handleUpdate = () => refreshData();
+    window.addEventListener('local-storage-update', handleUpdate);
+
+    return () => window.removeEventListener('local-storage-update', handleUpdate);
+}, [currentUser?.id]);
     const [announcements, setAnnouncements] = useState([]);
    const filtered = (announcements|| []).filter(a => 
   a.wardNumber === currentUser?.wardNumber
@@ -45,7 +54,7 @@ export default function Politician() {
 const updateStatus = async (id, status) => {
     try {
         await fetch(
-            `http://localhost:3103/issues/${id}/status?status=${status}`,
+            `https://backendfullstack-production.up.railway.app/issues/${id}/status?status=${status}`,
             { method: "PUT" }
         );
         fetchWardIssues();
@@ -53,10 +62,24 @@ const updateStatus = async (id, status) => {
         console.error(err);
     }
 };
+const formatDateTime = (date) => {
+  if (!date) return "";
 
+  const d = new Date(date);
+  if (isNaN(d)) return "";
+
+  return d.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  });
+};
 const refreshData = async () => {
   try {
-    const res = await fetch("http://localhost:3103/announcements");
+    const res = await fetch("https://backendfullstack-production.up.railway.app/announcements");
     const data = await res.json();
     setAnnouncements(data || []);
   } catch (err) {
@@ -65,7 +88,7 @@ const refreshData = async () => {
 };
 const fetchResponses = async () => {
   try {
-    const res = await fetch("http://localhost:3103/responses");
+    const res = await fetch("https://backendfullstack-production.up.railway.app/responses");
     const data = await res.json();
 
     setAllResponses(Array.isArray(data) ? data : []);
@@ -82,7 +105,7 @@ const fetchResponses = async () => {
   }
 
   try {
-    await fetch("http://localhost:3103/announcements", {
+    await fetch("https://backendfullstack-production.up.railway.app/announcements", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -92,7 +115,8 @@ const fetchResponses = async () => {
   content: annContent,
   politicianName: currentUser.name,
   constituency: currentUser.constituency,
-  wardNumber: currentUser.wardNumber   // 🔥 IMPORTANT
+  wardNumber: currentUser.wardNumber,
+  timestamp: new Date().toISOString()   // 🔥 IMPORTANT
 })
     });
 
@@ -115,7 +139,7 @@ const fetchWardAnnouncements = async () => {
     if (!currentUser?.wardNumber) return;
 
     const res = await fetch(
-      `http://localhost:3103/announcements/ward?wardNumber=${currentUser.wardNumber}`
+      `https://backendfullstack-production.up.railway.app/announcements/ward?wardNumber=${currentUser.wardNumber}`
     );
 
     const data = await res.json();
@@ -132,7 +156,7 @@ const fetchWardIssues = async () => {
     if (!currentUser?.wardNumber) return;
 
     const res = await fetch(
-      `http://localhost:3103/issues/ward?wardNumber=${currentUser.wardNumber}`
+      `https://backendfullstack-production.up.railway.app/issues/ward?wardNumber=${currentUser.wardNumber}`
     );
 
     const data = await res.json();
@@ -145,18 +169,16 @@ const fetchWardIssues = async () => {
   }
 };  
 useEffect(() => {
-    if (!currentUser?.wardNumber) return;
+  if (!currentUser) return;
 
-    fetchWardIssues();
-    fetchWardAnnouncements();
-    fetchResponses();   // ✅ ADD THIS
-    refreshData();
-
-}, [currentUser]);
-
+  fetchWardIssues();
+  fetchWardAnnouncements();
+  fetchResponses();
+  refreshData();
+}, [currentUser?.id]);
    const deleteAnn = async (id) => {
   try {
-    await fetch(`http://localhost:3103/announcements/${id}`, {
+    await fetch(`https://backendfullstack-production.up.railway.app/announcements/${id}`, {
       method: "DELETE"
     });
     refreshData();
@@ -175,7 +197,7 @@ useEffect(() => {
   console.log("✅ Sending:", respondIssueId, responseText);
 
   try {
-    const res = await fetch("http://localhost:3103/responses", {
+    const res = await fetch("https://backendfullstack-production.up.railway.app/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -195,47 +217,58 @@ useEffect(() => {
     console.error(err);
   }
 };
-
-    const saveProfile = async (e) => {
-  e.preventDefault();
-
-  const patch = {
-    name: profName.trim(),
-    email: profEmail.trim(),
-    constituency: profConst.trim()
-  };
-
-  if (profPass) patch.password = profPass;
-
+const saveProfile = async () => {
   try {
+    const bodyData = {
+      name: profName,
+      street: profStreet,
+      district: profDistrict,
+      state: profState,
+      wardNumber: profWard ? Number(profWard) : null
+    };
+
+    // 🔥 ONLY send password if user typed it
+    if (profPass && profPass.trim() !== "") {
+      bodyData.password = profPass;
+    }
+
     const res = await fetch(
-      `http://localhost:3103/users/${currentUser.id}`,
+      `https://backendfullstack-production.up.railway.app/auth/users/${currentUser.id}`,
       {
         method: "PUT",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(patch)
+        body: JSON.stringify(bodyData)
       }
     );
 
-    if (!res.ok) throw new Error();
+    const data = await res.json();
 
-    showToast("Profile updated successfully ✅", "success");
+    console.log("UPDATE RESPONSE:", data); // 🔍 DEBUG
 
-    // 🔥 update frontend user also
-    setCurrentUser({
+    if (!res.ok) {
+      alert(data.message || "Update failed ❌");
+      return;
+    }
+
+    // update state
+    const updatedUser = {
       ...currentUser,
-      ...patch
-    });
+      ...data
+    };
+
+    setCurrentUser(updatedUser);
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+
+    alert("Profile updated ✅");
 
   } catch (err) {
     console.error(err);
-    showToast("Failed to update profile ❌", "error");
+    alert("Server error ❌");
   }
 };
-
-    const openCount = issues.filter(i => i.status === 'open').length;
+const openCount = issues.filter(i => i.status === 'open').length;
 
     const navLinks = [
         { type: 'label', label: 'Engagement' },
@@ -251,15 +284,6 @@ useEffect(() => {
     const getHeaderTitle = () => {
         return { inbox: 'Issue Inbox', announce: 'Post Announcement', myann: 'My Announcements', stats: 'Engagement Stats', profile: 'My Profile' }[activeSection] || activeSection;
     };
-    const timeAgo = (date) => {
-  const now = new Date();
-  const diff = Math.floor((now - new Date(date)) / 1000);
-
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return Math.floor(diff / 60) + " min ago";
-  if (diff < 86400) return Math.floor(diff / 3600) + " hrs ago";
-  return Math.floor(diff / 86400) + " days ago";
-};
     const filteredIssues = inboxFilter === 'all' ? issues : issues.filter(i => i.status === inboxFilter);
     const respondIssue = respondIssueId ? issues.find(i => i.id === respondIssueId) : null;
     // Stats calculations
@@ -318,7 +342,9 @@ useEffect(() => {
                                     <div className="issue-footer">
                                         <span className="issue-info">👤 {issue.citizenName}</span>
 
-                                        <span className="issue-info">🕐 {timeAgo(issue.timestamp)}</span>
+                                        {issue.timestamp && (
+  <span className="issue-info">🕐 {timeAgo(issue.timestamp)}</span>
+)}
                                         <span className="issue-info">
   💬 {
     allResponses.filter(r =>
@@ -326,8 +352,6 @@ useEffect(() => {
     ).length
   }
 </span>
-
-                                        <span className="issue-info">👍 {issue.votes}</span>
                                         <button className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => {
                                             setRespondIssueId(issue.id);
                                             setResponseStatus(issue.status);
@@ -478,18 +502,25 @@ useEffect(() => {
                         <div><h1>My Profile</h1></div>
                     </div>
                     <div className="card" style={{ maxWidth: '500px' }}>
-                        <form onSubmit={saveProfile}>
+                        <form onSubmit={(e) => {
+                        e.preventDefault();
+                        saveProfile();
+                      }}>
                             <div className="form-group">
                                 <label className="form-label">Full Name</label>
                                 <input className="form-control" value={profName} onChange={e => setProfName(e.target.value)} />
                             </div>
                             <div className="form-group">
                                 <label className="form-label">Email</label>
-                                <input type="email" className="form-control" value={profEmail} onChange={e => setProfEmail(e.target.value)} />
+                                <input type="email" className="form-control" value={profEmail} disabled onChange={e => setProfEmail(e.target.value)} />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Constituency</label>
-                                <input className="form-control" value={profConst} onChange={e => setProfConst(e.target.value)} />
+                                <label className="form-label">Ward Number</label>
+                                <input 
+  className="form-control"
+  value={profWard}
+  onChange={e => setProfWard(e.target.value)}
+/>
                             </div>
                             <div className="form-group">
                                 <label className="form-label">New Password</label>
@@ -537,11 +568,21 @@ useEffect(() => {
                                         <div key={r.id} className="response-item">
                                             <div className={`response-avatar ${r.authorRole}`}>{r.authorName.charAt(0)}</div>
                                             <div className="response-bubble">
-                                                <span className="response-author">{r.authorName}</span>
-                                                <span className="response-role">{r.authorRole}</span>
-                                                <div className="response-text">{r.content}</div>
-                                                <div className="response-time">{timeAgo(r.timestamp)}</div>
-                                            </div>
+
+  <div className="response-header">
+    <div>
+      <span className="response-author">{r.authorName}</span>
+      <span className="response-role">{r.authorRole}</span>
+    </div>
+
+    <span className="response-time">
+      {formatDateTime(r.timestamp)}
+    </span>
+  </div>
+
+  <div className="response-text">{r.content}</div>
+
+</div>
                                         </div>
                                     ))}
                                 </div>
@@ -552,10 +593,15 @@ useEffect(() => {
                             <button 
   className="btn btn-primary" 
   onClick={async () => {
-    await submitResponse();  
-    await fetchResponses();
-    await fetchWardIssues(); 
-    setRespondIssueId(null);
+  await submitResponse();  
+
+  // 🔥 ADD THIS LINE
+  await updateStatus(respondIssueId, responseStatus);
+
+  await fetchResponses();
+  await fetchWardIssues(); 
+
+  setRespondIssueId(null);
 }}
 >
     📤 Send Response

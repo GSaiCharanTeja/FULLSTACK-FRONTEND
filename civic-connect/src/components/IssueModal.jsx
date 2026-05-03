@@ -1,7 +1,21 @@
 import React from 'react';
 import { getStatusBadgeData, getCatIcon, getCatClass } from '../utils/helpers';
 import { timeAgo } from '../utils/data';
+const formatDateTime = (date) => {
+  if (!date) return "";
 
+  const d = new Date(date);
+  if (isNaN(d)) return "";
+
+  return d.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  });
+};
 export default function IssueModal({ issue, responses = [], onClose }) {
     if (!issue) return null;
 
@@ -31,9 +45,7 @@ export default function IssueModal({ issue, responses = [], onClose }) {
                             <small>📍 Ward {issue.wardNumber || 'N/A'}</small>
 
                             {/* ✅ Safe time */}
-                            <small>
-                                🕐 {issue.timestamp ? timeAgo(issue.timestamp) : "Just now"}
-                            </small>
+                            
                         </div>
 
                         <p>{issue.description}</p>
@@ -55,15 +67,21 @@ export default function IssueModal({ issue, responses = [], onClose }) {
                                     </div>
 
                                     <div className="response-bubble">
-                                        <span className="response-author">{r.authorName}</span>
-                                        <span className="response-role">{r.authorRole}</span>
 
-                                        <div className="response-text">{r.content}</div>
-
-                                        <div className="response-time">
-                                            {r.timestamp ? timeAgo(r.timestamp) : ""}
-                                        </div>
+                                <div className="response-header">
+                                    <div>
+                                    <span className="response-author">{r.authorName}</span>
+                                    <span className="response-role">{r.authorRole}</span>
                                     </div>
+
+                                    <span className="response-time">
+                                    {formatDateTime(r.timestamp)}
+                                    </span>
+                                </div>
+
+                                <div className="response-text">{r.content}</div>
+
+                                </div>
 
                                 </div>
                             ))

@@ -3,6 +3,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../utils/toast';
 import { getStatusBadgeData, getCatIcon, getCatClass } from '../utils/helpers';
+import { Responses, Users, Issues } from '../utils/data';
 export default function Moderator() {
     const { currentUser, setCurrentUser } = useAuth();
     const [activeSection, setActiveSection] = useState('queue');
@@ -18,30 +19,60 @@ export default function Moderator() {
     const [issStatus, setIssStatus] = useState('all');
 
     // Profile form
+    const [profWard, setProfWard] = useState(currentUser?.wardNumber || '');
+    const [profStreet, setProfStreet] = useState(currentUser?.street || '');
+    const [profDistrict, setProfDistrict] = useState(currentUser?.district || '');
+    const [profState, setProfState] = useState(currentUser?.state || '');
     const [profName, setProfName] = useState(currentUser?.name || '');
     const [profEmail, setProfEmail] = useState(currentUser?.email || '');
     const [profPass, setProfPass] = useState('');
     
     // Flag modal
-    const [flagTargetId, setFlagTargetId] = useState(null);
-    const [flagTargetType, setFlagTargetType] = useState(null);
     const [flagReason, setFlagReason] = useState('Inappropriate language');
     const [flagNotes, setFlagNotes] = useState('');
 
     const fetchAllIssues = async () => {
   try {
-    const res = await fetch("http://localhost:3103/issues");
+    const res = await fetch("https://backendfullstack-production.up.railway.app/issues");
     const data = await res.json();
     setAllIssues(data);
   } catch (err) {
     console.error(err);
   }
 };
-    useEffect(() => {
-        const handleUpdate = () => refreshData();
-        return () => window.removeEventListener('local-storage-update', handleUpdate);
-    }, []);
+const handleSubmitFlag = () => {
+    if(!selectedIssueId)return;
+  handleReject(selectedIssueId, flagReason, flagNotes);
+  setIsModalOpen(false);
+  setSelectedIssueId(null);
+};
+const handleReject = async (issueId, reason, notes) => {
+  try {
+    // ✅ FIXED HERE
+    await fetch(`https://backendfullstack-production.up.railway.app/issues/${issueId}/reject`, {
+      method: "PUT",
+    });
 
+    // save rejection message
+    await fetch("https://backendfullstack-production.up.railway.app/responses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        issueId,
+        content: `❌ Rejected: ${reason}\n${notes || ""}`,
+        authorName: "Moderator",
+        authorRole: "moderator",
+        timestamp: new Date().toISOString()
+      })
+    });
+
+    fetchPendingIssues();
+    fetchAllIssues();
+
+  } catch (err) {
+    console.error(err);
+  }
+};
     const resolveFlag = (flagId, action) => {
         const flag = flags.find(f => f.id === flagId);
         if (!flag) return;
@@ -66,7 +97,7 @@ export default function Moderator() {
     }, []);
 const submitFlag = async () => {
   try {
-    await fetch("http://localhost:3103/flags", {
+    await fetch("https://backendfullstack-production.up.railway.app/flags", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -86,20 +117,20 @@ const submitFlag = async () => {
   }
 };
 const fetchPendingIssues = async () => {
-  const res = await fetch("http://localhost:3103/issues/pending");
+  const res = await fetch("https://backendfullstack-production.up.railway.app/issues/pending");
   const data = await res.json();
 
   setPendingIssues(Array.isArray(data) ? data : []);
 };
 const fetchIssues = async () => {
-  const res = await fetch("http://localhost:3103/issues");
+  const res = await fetch("https://backendfullstack-production.up.railway.app/issues");
   const data = await res.json();
   setAllIssues(data);
 };
 const removeIssue = async (id) => {
   if (!window.confirm("Remove this issue?")) return;
 
-  await fetch(`http://localhost:3103/issues/${id}`, {
+  await fetch(`https://backendfullstack-production.up.railway.app/issues/${id}`, {
     method: "DELETE"
   });
 
@@ -108,7 +139,7 @@ const removeIssue = async (id) => {
 };
 const fetchFlags = async () => {
   try {
-    const res = await fetch("http://localhost:3103/flags");
+    const res = await fetch("https://backendfullstack-production.up.railway.app/flags");
 
     if (!res.ok) throw new Error("Failed to fetch flags");
     const data = await res.json();
@@ -117,33 +148,72 @@ const fetchFlags = async () => {
     console.error(err);
   }
 };
-    const saveProfile = async (e) => {
-  e.preventDefault();
+const formatDateTime = (date) => {
+  if (!date) return "";
 
+  const d = new Date(date);
+  if (isNaN(d)) return "";
+
+  return d.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  });
+};
+const saveProfile = async () => {
   try {
-    const res = await fetch(`http://localhost:3103/users/${currentUser.id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        name: profName,
-        email: profEmail,
-        password: profPass || undefined
-      })
-    });
+    const bodyData = {
+      name: profName,
+      street: profStreet,
+      district: profDistrict,
+      state: profState,
+      wardNumber: profWard ? Number(profWard) : null
+    };
 
-    const updatedUser = await res.json();
+    // 🔥 ONLY send password if user typed it
+    if (profPass && profPass.trim() !== "") {
+      bodyData.password = profPass;
+    }
+
+    const res = await fetch(
+      `https://backendfullstack-production.up.railway.app/auth/users/${currentUser.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(bodyData)
+      }
+    );
+
+    const data = await res.json();
+
+    console.log("UPDATE RESPONSE:", data); // 🔍 DEBUG
+
+    if (!res.ok) {
+      alert(data.message || "Update failed ❌");
+      return;
+    }
+
+    // update state
+    const updatedUser = {
+      ...currentUser,
+      ...data
+    };
+
     setCurrentUser(updatedUser);
+    localStorage.setItem("user", JSON.stringify(updatedUser));
 
-    showToast("Profile updated", "success");
+    alert("Profile updated ✅");
 
   } catch (err) {
-    showToast("Error updating profile", "error");
+    console.error(err);
+    alert("Server error ❌");
   }
 };
-
-
     const navLinks = [
         { type: 'label', label: 'Moderation' },
         { id: 'queue', icon: '🚩', label: 'Content Queue', badge: flags.length },
@@ -191,7 +261,7 @@ const timeAgo = (date) => {
         ...allResp.map(r => ({ ts: r.timestamp, icon: '💬', text: `<strong>${r.authorName}</strong> (${r.authorRole}) responded to an issue`, type: 'response', id: r.id })),
         ...allAnn.map(a => ({ ts: a.timestamp, icon: '📣', text: `<strong>${a.politicianName}</strong> posted: "${a.title}"`, type: 'ann', id: a.id })),
 
-    ].sort((a, b) => b.ts - a.ts).slice(0, 30);
+    ].sort((a, b) => new Date(b.ts) - new Date(a.ts)).slice(0, 30);
     return (
         <DashboardLayout 
             navLinks={navLinks} 
@@ -210,7 +280,7 @@ const timeAgo = (date) => {
                     </div>
                     <div>
 
-                        {flags.length === 0 && pendingIssues===0 ? (
+                        {flags.length === 0 && pendingIssues.length===0 ? (
                             <div className="empty-state"><div className="empty-icon">✅</div><p>No flagged content. Everything looks clean!</p></div>
                         ) : (
                             flags.map(flag => {
@@ -229,7 +299,7 @@ const timeAgo = (date) => {
                                             <span className="badge badge-flagged">🚩 Flagged {flag.targetType}</span>
                                             <small>Reason: <strong>{flag.reason}</strong></small>
                                             <small>Raised by: {raiser ? raiser.name : 'Unknown'}</small>
-                                            <small style={{ marginLeft: 'auto' }}>{timeAgo(flag.raisedAt)}</small>
+                                            <small style={{ marginLeft: 'auto' }}>{formatDateTime(flag.raisedAt)}</small>
                                         </div>
                                         <h4 style={{ marginBottom: '6px' }}>{targetTitle}</h4>
                                         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{content}</p>
@@ -256,13 +326,14 @@ const timeAgo = (date) => {
       <div className="issue-footer">
         <span>👤 {issue.citizenName}</span>
         <span>📍 Ward {issue.wardNumber}</span>
-        <span>🕐 {timeAgo(issue.timestamp)}</span>
-
+        <span>
+        🕐 {formatDateTime(issue.timestamp)}
+        </span>
         {/* ✅ APPROVE */}
         <button
           className="btn btn-success"
           onClick={async () => {
-            await fetch(`http://localhost:3103/issues/${issue.id}/approve`, {
+            await fetch(`https://backendfullstack-production.up.railway.app/issues/${issue.id}/approve`, {
               method: "PUT"
             });
 
@@ -275,11 +346,14 @@ const timeAgo = (date) => {
 
         {/* ❌ REJECT */}
         <button
-          className="btn btn-danger"
-          onClick={() => removeIssue(issue.id)}
-        >
-          🗑 Reject
-        </button>
+  className="btn btn-danger"
+  onClick={() => {
+    setSelectedIssueId(issue.id);
+    setIsModalOpen(true);
+  }}
+>
+  🗑 Reject
+</button>
 
       </div>
     </div>
@@ -321,7 +395,7 @@ const timeAgo = (date) => {
                                     <small>{timeAgo(a.ts)}</small>
                                 </div>
                                 {a.type === 'issue' && (
-                                    <button className="flag-btn" onClick={() => { setFlagTargetId(a.id); setFlagTargetType('issue'); }}>🚩 Flag</button>
+                                    <button className="flag-btn" onClick={() => { setIsModalOpen(true); setSelectedIssueId(a.id); }}>🚩 Flag</button>
                                 )}
                             </div>
                         ))}
@@ -364,8 +438,7 @@ const timeAgo = (date) => {
                                     <div className="issue-footer">
                                         <span className="issue-info">👤 {issue.citizenName}</span>
                                         <span className="issue-info">📍 {issue.constituency}</span>
-                                        <span className="issue-info">🕐 {timeAgo(issue.timestamp)}</span>
-                                        <button className="flag-btn" onClick={() => { setFlagTargetId(issue.id); setFlagTargetType('issue'); }}>🚩 Flag</button>
+                                        
                                         <button className="btn btn-danger btn-xs" onClick={() => removeIssue(issue.id)}>🗑️ Remove</button>
                                     </div>
                                 </div>
@@ -389,7 +462,7 @@ const timeAgo = (date) => {
                             </div>
                             <div className="form-group">
                                 <label className="form-label">Email</label>
-                                <input type="email" className="form-control" value={profEmail} onChange={e => setProfEmail(e.target.value)} />
+                                <input type="email" className="form-control" value={profEmail} disabled onChange={e => setProfEmail(e.target.value)} />
                             </div>
                             <div className="form-group">
                                 <label className="form-label">New Password</label>
@@ -402,37 +475,82 @@ const timeAgo = (date) => {
             )}
 
             {/* FLAG MODAL */}
-            {flagTargetId && (
-                <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setFlagTargetId(null); }}>
-                    <div className="modal">
-                        <div className="modal-header">
-                            <span className="modal-title">Flag Content</span>
-                            <button className="modal-close" onClick={() => setFlagTargetId(null)}>✕</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="form-group">
-                                <label className="form-label">Reason for Flagging</label>
-                                <select className="form-control" value={flagReason} onChange={e => setFlagReason(e.target.value)}>
-                                    <option>Inappropriate language</option>
-                                    <option>Misinformation</option>
-                                    <option>Spam or duplicate</option>
-                                    <option>Off-topic content</option>
-                                    <option>Harassment</option>
-                                    <option>Other</option>
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Notes (optional)</label>
-                                <textarea className="form-control" rows="3" placeholder="Any additional context..." value={flagNotes} onChange={e => setFlagNotes(e.target.value)}></textarea>
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => setFlagTargetId(null)}>Cancel</button>
-                            <button className="btn btn-danger" onClick={submitFlag}>🚩 Submit Flag</button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {isModalOpen && (
+  <div
+    className="modal-overlay open"
+    onClick={(e) => {
+      if (e.target === e.currentTarget) {
+        setIsModalOpen(false);
+        setSelectedIssueId(null);
+      }
+    }}
+  >
+    <div className="modal">
+      <div className="modal-header">
+        <span className="modal-title">Reject Issue</span>
+        <button
+          className="modal-close"
+          onClick={() => {
+            setIsModalOpen(false);
+            setSelectedIssueId(null);
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="modal-body">
+
+  <div className="form-group">
+    <label className="form-label">Reason</label>
+    <select
+      className="form-control"
+      value={flagReason}
+      onChange={(e) => setFlagReason(e.target.value)}
+    >
+      <option>Inappropriate language</option>
+      <option>Misinformation</option>
+      <option>Spam or duplicate</option>
+      <option>Off-topic content</option>
+      <option>Harassment</option>
+      <option>Other</option>
+    </select>
+  </div>
+
+  <div className="form-group">
+    <label className="form-label">Notes</label>
+    <textarea
+      className="form-control"
+      rows="4"
+      placeholder="Enter reason for rejection..."
+      value={flagNotes}
+      onChange={(e) => setFlagNotes(e.target.value)}
+    />
+  </div>
+
+</div>
+
+      <div className="modal-footer">
+        <button
+          className="btn btn-secondary"
+          onClick={() => {
+            setIsModalOpen(false);
+            setSelectedIssueId(null);
+          }}
+        >
+          Cancel
+        </button>
+
+        <button
+          className="btn btn-danger"
+          onClick={handleSubmitFlag}
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  </div>
+)}
         </DashboardLayout>
     );
 }

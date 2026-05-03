@@ -15,9 +15,6 @@ export default function DashboardLayout({ children, navLinks, activeSection, onS
                         <div>
                             <span className="logo-text">CivicConnect</span>
                             <span className="logo-role-badge" id="sidebar-constituency">
-
-                                {currentUser.constituency || (currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1))}
-
                                 {currentUser.constituency || (currentUser.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : 'User')}
                             </span>
                         </div>
@@ -49,7 +46,7 @@ export default function DashboardLayout({ children, navLinks, activeSection, onS
                             {currentUser.name ? currentUser.name.charAt(0).toUpperCase() : '?'}
                         </div>
                         <div>
-                            <div className="user-name" id="user-name">{currentUser.name || 'Loading...'}</div>
+                            <div className="user-name" id="user-name">{currentUser.name ||"User"}</div>
                             
 
                             <div className="user-role" style={{ textTransform: 'capitalize' }}>{currentUser.role || "User"}</div>

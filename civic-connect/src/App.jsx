@@ -9,12 +9,20 @@ import Admin from './pages/Admin';
 function ProtectedRoute({ children, allowedRoles }) {
   const { currentUser } = useAuth();
 
-  if (!currentUser) return <Navigate to="/" replace />;
+  // ✅ WAIT until auth loads
+  if (currentUser === undefined) {
+    return <div>Loading...</div>;
+  }
 
-  if (allowedRoles && !allowedRoles.includes(currentUser.role?.toLowerCase())) {
+  // ❌ Not logged in
+  if (!currentUser) {
     return <Navigate to="/" replace />;
   }
 
+  // ❌ Wrong role
+  if (allowedRoles && !allowedRoles.includes(currentUser.role?.toLowerCase())) {
+    return <Navigate to="/" replace />;
+  }
 
   return children;
 }
@@ -24,31 +32,31 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Landing />} />
-        
+
         <Route path="/citizen" element={
           <ProtectedRoute allowedRoles={['citizen']}>
             <Citizen />
           </ProtectedRoute>
         } />
-        
+
         <Route path="/politician" element={
           <ProtectedRoute allowedRoles={['politician']}>
             <Politician />
           </ProtectedRoute>
         } />
-        
+
         <Route path="/moderator" element={
           <ProtectedRoute allowedRoles={['moderator']}>
             <Moderator />
           </ProtectedRoute>
         } />
-        
+
         <Route path="/admin" element={
           <ProtectedRoute allowedRoles={['admin']}>
             <Admin />
           </ProtectedRoute>
         } />
-        
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

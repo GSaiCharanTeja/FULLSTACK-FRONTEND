@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { showToast } from '../utils/toast';
 import './Landing.css';
 import { useLocation } from 'react-router-dom';
+
 export default function Landing() {
     const { currentUser,setCurrentUser } = useAuth();
     const navigate = useNavigate();
@@ -14,9 +15,6 @@ export default function Landing() {
     const [loginEmail, setLoginEmail] = useState('');
     const [loginPassword, setLoginPassword] = useState('');
     const [loginError, setLoginError] = useState('');
-
-
-
     const [activeSection, setActiveSection] = useState('queue');
 
     // Register state
@@ -26,14 +24,6 @@ export default function Landing() {
     const [regConfirm, setRegConfirm] = useState('');
     const [regConst, setRegConst] = useState('');
     const [regError, setRegError] = useState('');
-    useEffect(() => {
-        if (currentUser) {
-            navigate(`/${currentUser.role}`);
-        }
-    }, [currentUser, navigate]);
-
-
-    const [email, setEmail] = useState("");
     const [otp, setOtp] = useState("");
     const [otpSent, setOtpSent] = useState(false);
     const [verified, setVerified] = useState(false);
@@ -49,107 +39,70 @@ export default function Landing() {
         setLoginError('');
         showToast('Demo account filled — click Sign In!', 'info');
     };
-  useEffect(() => {
-  if (!currentUser || !currentUser.role) return;
-
-  const targetPath = `/${currentUser.role.toLowerCase()}`;
-
-  if (window.location.pathname !== targetPath) {
-    navigate(targetPath);
-  }
-
-}, [currentUser, location.pathname]);
 const [stats, setStats] = useState({
     totalIssues: 0,
     pending: 0
 });
-
-const [allIssues, setAllIssues] = useState([]);
-const handleLogin = async (e) => {
-  e.preventDefault();
-  setLoginError("");
-
+const checkEmailExists = async (email) => {
   try {
-    const res = await fetch("http://localhost:3103/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        email: loginEmail.trim(),
-    password: loginPassword.trim()
-      })
-    });
+    const res = await fetch(
+      `https://backendfullstack-production.up.railway.app/auth/check-email?email=${email}`
+    );
 
     const data = await res.json();
 
-    if (res.ok && data) {
-      const user = {
-        ...data,
-        role: data.role?.toLowerCase()
-      };
-
-      setCurrentUser(user);
-      localStorage.setItem("user", JSON.stringify(user));
-
-      showToast("Login successful 🎉", "success");
-
-      navigate(`/${user.role}`);
-    } else {
-      setLoginError(data?.message || "Invalid credentials ❌");
-    }
-
+    return data.exists === true; // 🔥 IMPORTANT
   } catch (err) {
     console.error(err);
-    setLoginError("Server error ❌");
+    return false;
   }
 };
- const createAccount = async () => {
-    try {
-        const res = await fetch("http://localhost:3103/signup", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                  name: regName,
-                  email: regEmail,
-                  password: regPassword,
-                  wardNumber: ward,
-                  street: street,
-                  district: district,
-                  state: state
-            })
-        });
-
-        if (res.ok) {
-            showToast("Account created 🎉", "success");
-            navigate("/citizen");
-        } else {
-            setRegError("Signup failed ❌");
-        }
-
-    } catch (err) {
-        setRegError("Server error ❌");
-    }
-};
-
-   const handleRegister = async (e) => {
+const [allIssues, setAllIssues] = useState([]);
+  // ✅ REGISTER HANDLER (FINAL)
+const handleRegister = async (e) => {
   e.preventDefault();
 
+  if (!regEmail.trim()) {
+    setRegError("Email is required ❌");
+    return;
+  }
+
   if (regPassword !== regConfirm) {
-    setRegError('Passwords do not match.');
+    setRegError("Passwords do not match ❌");
     return;
   }
 
   try {
+    console.log("Checking email:", regEmail);
+
+    const exists = await checkEmailExists(regEmail.trim().toLowerCase());
+
+    console.log("Exists:", exists);
+
+    // 🔴 CRITICAL STOP
+    if (exists) {
+      setRegError("Email already registered ❌");
+      return;
+    }
+
+    // ✅ ONLY NEW EMAIL → SEND OTP
     const res = await fetch(
-      `http://localhost:8080/auth/send-otp?email=${regEmail}`,
-      { method: "POST" }
+      "https://backendfullstack-production.up.railway.app/auth/send-otp",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: regEmail.trim().toLowerCase()
+        })
+      }
     );
 
+    const data = await res.json();
+
     if (!res.ok) {
-      setRegError("Failed to send OTP ❌");
+      setRegError(data.message || "Failed to send OTP ❌");
       return;
     }
 
@@ -157,39 +110,123 @@ const handleLogin = async (e) => {
     showToast("OTP Sent ✅", "success");
 
   } catch (err) {
+    console.error(err);
     setRegError("Server error ❌");
   }
 };
 const isOtpValid = otp.trim().length === 6;
-const verifyOtp = async () => {
+const handleVerifyOtp = async () => {
   try {
-    const cleanOtp = otp.trim();
-
     const res = await fetch(
-      `http://localhost:8080/auth/verify-otp?email=${regEmail}&otp=${cleanOtp}`,
-      { method: "POST" }
+      "https://backendfullstack-production.up.railway.app/auth/verify-otp",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: regEmail.trim().toLowerCase(),
+          otp: otp,
+          name: regName,
+          password: regPassword,
+          role: selectedRole,
+          wardNumber: ward ? Number(ward) : null,
+          street: street,
+          district: district,
+          state: state
+        })
+      }
     );
 
-    const text = await res.text();
-    console.log("Response:", text);
+    const data = await res.json();
 
-    // ✅ SUCCESS CASE
-    if (res.ok && text.toLowerCase().includes("success")) {
-      showToast("OTP Verified ✅", "success");
-      setVerified(true);
-      setRegError(""); // clear error
-    } 
-    // ❌ INVALID OTP
-    else if (text.toLowerCase().includes("invalid")) {
-      setRegError("Invalid OTP ❌");
-    } 
-    // ❌ OTHER ERROR
-    else {
-      setRegError("Verification failed ❌");
+    if (!res.ok) {
+      setRegError(data.message);
+      return;
     }
 
+    // ✅ SUCCESS
+    setVerified(true);
+    showToast("Account created 🎉", "success");
+
+    // ✅ SAVE USER (IMPORTANT)
+    setCurrentUser(data);
+    localStorage.setItem("user", JSON.stringify(data));
+
+    // ✅ NAVIGATE
+    navigate(`/${data.role.toLowerCase()}`);
+
+    // ✅ RESET AFTER EVERYTHING
+    setOtpSent(false);
+    setOtp("");
+    setRegEmail("");
+    setRegPassword("");
+    setRegConfirm("");
+    setRegName("");
+    setWard("");
+    setStreet("");
+    setDistrict("");
+    setState("");
+
   } catch (err) {
-    setRegError("Server error ❌");
+    console.error(err);
+    setRegError("Verification failed ❌");
+  }
+};
+const handleLogin = async (e) => {
+  e.preventDefault();
+
+  if (!loginEmail || !loginPassword) {
+    setLoginError("Email & Password required ❌");
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      "https://backendfullstack-production.up.railway.app/auth/login",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email: loginEmail.trim().toLowerCase(),
+          password: loginPassword
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    // 🔥 HANDLE DEACTIVATED USER
+    if (res.status === 403) {
+      setLoginError(data.message || "Account is deactivated by admin ❌");
+      return;
+    }
+
+    // 🔥 HANDLE WRONG CREDENTIALS
+    if (res.status === 401) {
+      setLoginError(data.message || "Invalid credentials ❌");
+      return;
+    }
+
+    // 🔥 OTHER ERRORS
+    if (!res.ok) {
+      setLoginError("Something went wrong ❌");
+      return;
+    }
+
+    // ✅ SUCCESS LOGIN
+    const role = (data.role || "citizen").toLowerCase();
+
+    setCurrentUser(data);
+    localStorage.setItem("user", JSON.stringify(data));
+
+    navigate(`/${role}`);
+
+  } catch (err) {
+    console.error(err);
+    setLoginError("Server error ❌");
   }
 };
 return (
@@ -261,23 +298,7 @@ return (
 
                                     <div className="demo-accounts">
                                         <div className="demo-label">⚡ Quick Demo Login</div>
-                                        <div className="demo-account" onClick={() => fillDemo('admin@civic.gov', 'password')}>
-                                            <span className="demo-email">admin@civic.gov</span>
-                                            <span className="demo-role badge badge-admin">Admin</span>
-                                        </div>
-                                        <div className="demo-account" onClick={() => fillDemo('jane@politics.gov', 'password')}>
-                                            <span className="demo-email">jane@politics.gov</span>
-                                            <span className="demo-role badge badge-politician">Politician</span>
-                                        </div>
-                                        <div className="demo-account" onClick={() => fillDemo('citizen@civic.gov', 'password')}>
-                                            <span className="demo-email">citizen@civic.gov</span>
-                                            <span className="demo-role badge badge-citizen">Citizen</span>
-                                        </div>
-                                        <div className="demo-account" onClick={() => fillDemo('mod@civic.gov', 'password')}>
-                                            <span className="demo-email">mod@civic.gov</span>
-                                            <span className="demo-role badge badge-moderator">Moderator</span>
-                                        </div>
-
+                                        
                                         <form onSubmit={handleLogin}>
   <div className="form-group">
     <label className="form-label">Email</label>
@@ -474,7 +495,7 @@ return (
                                       type="button"
                                       className="btn btn-warning"
                                       style={{ width: "100%" }}
-                                      onClick={verifyOtp}
+                                      onClick={handleVerifyOtp}
                                       disabled={!isOtpValid}
                                     >
                                       Verify OTP
@@ -484,18 +505,14 @@ return (
                                           type="button"
                                           className="btn btn-success"
                                           style={{ width: "100%", marginTop: "10px" }}
-                                          onClick={createAccount}
+                                         
                                         >
                                           Create Account
                                         </button>
                                       )}
 
                                     </form>
-                                    {regError && (
-                                      <div className="auth-error" style={{ display: 'block' }}>
-                                        {regError}
-                                      </div>
-                                    )}
+                                    
                                 </div>
                             )}
                         </div>

@@ -1,65 +1,36 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Session, seedIfEmpty } from '../utils/data';
-import { login as authLogin, register as authRegister, logout as authLogout } from '../utils/auth';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-    const [currentUser, setCurrentUser] = useState(null);
 
-    const [loading, setLoading] = useState(true);
+    // 🔥 IMPORTANT: start as undefined
+    const [currentUser, setCurrentUser] = useState(undefined);
 
     useEffect(() => {
-        seedIfEmpty();
-        const user = Session.currentUser();
-        if (user) {
-            setCurrentUser(user);
+        const storedUser = localStorage.getItem("user");
+
+        if (storedUser) {
+            setCurrentUser(JSON.parse(storedUser));
+        } else {
+            setCurrentUser(null);
         }
-        setLoading(false);
     }, []);
 
-
-
-
-
-    // ✅ TEMP LOGIN (no backend)
-    const login = (email, password) => {
-        // fake user (temporary)
-        const user = {
-            id: 1,
-            name: "Test User",
-            email: email,
-            role: "citizen"
-        };
-
-        setCurrentUser(user);
-
-        return { ok: true, user };
-    };
-
-    // ✅ TEMP REGISTER
-    const register = (name, email, password, role, constituency) => {
-        const user = {
-            id: Date.now(),
-            name,
-            email,
-            role,
-            constituency
-        };
-
-        setCurrentUser(user);
-
-        return { ok: true, user };
+    // ✅ LOGIN
+    const login = (userData) => {
+        setCurrentUser(userData);
+        localStorage.setItem("user", JSON.stringify(userData));
     };
 
     // ✅ LOGOUT
     const logout = () => {
         setCurrentUser(null);
+        localStorage.removeItem("user");
     };
 
     return (
-        <AuthContext.Provider value={{ currentUser, login, register, logout, setCurrentUser }}>
+        <AuthContext.Provider value={{ currentUser, setCurrentUser, login, logout }}>
             {children}
         </AuthContext.Provider>
     );
@@ -67,5 +38,4 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
     return useContext(AuthContext);
-
 }

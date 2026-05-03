@@ -29,7 +29,7 @@ export default function Admin() {
     const [euEmail, setEuEmail] = useState('');
     const [euRole, setEuRole] = useState('citizen');
     const [euConst, setEuConst] = useState('');
-    const [euActive, setEuActive] = useState('true');
+    const [euActive, setEuActive] = useState(true);
     const [euPass, setEuPass] = useState('');
     const [auWardNumber, setAuWardNumber] = useState("");
     const [auStreet, setAuStreet] = useState("");
@@ -46,15 +46,15 @@ export default function Admin() {
     const [auConst, setAuConst] = useState('')
     const refreshData = async () => {
   try {
-    const usersRes = await fetch("http://localhost:3103/users");
+    const usersRes = await fetch("https://backendfullstack-production.up.railway.app/auth/users");
     const usersData = await usersRes.json();
     setUsers(usersData);
 
-    const issuesRes = await fetch("http://localhost:3103/issues");
+    const issuesRes = await fetch("https://backendfullstack-production.up.railway.app/issues");
     const issuesData = await issuesRes.json();
     setIssues(issuesData);
 
-    const flagsRes = await fetch("http://localhost:3103/flags");
+    const flagsRes = await fetch("https://backendfullstack-production.up.railway.app/flags");
     const flagsData = await flagsRes.json();
     setFlags(flagsData);
 
@@ -70,28 +70,18 @@ export default function Admin() {
     }, []);
 
     // ... user mgmt
-    const openEditModal = (u) => {
-        setEditUser(u);
-        setEuName(u.name); setEuEmail(u.email); setEuRole(u.role); setEuConst(u.constituency || ''); setEuActive(String(u.active)); setEuPass('');
-    };
-    const addUser = () => {
-        if (!auName || !auEmail || !auPass) { showToast('Fill all required fields.', 'error'); return; }
-        if (Users.findByEmail(auEmail.trim())) { showToast('Email already in use.', 'error'); return; }
-        Users.add({ id: genId(), name: auName.trim(), email: auEmail.trim(), password: auPass, role: auRole, constituency: auConst.trim(), active: true, joined: Date.now() });
-        setShowAddUser(false);
-        setAuName(''); setAuEmail(''); setAuPass(''); setAuRole('citizen'); setAuConst('');
-        showToast('User created!', 'success');
-    };
-    const toggleUser = (id) => {
-        const u = Users.find(id);
-        Users.update(id, { active: !u.active });
-        showToast(`User ${u.active ? 'deactivated' : 'activated'}.`, 'info');
-    };
-    const adminChangeStatus = (id, st) => {
-        Issues.update(id, { status: st });
-        showToast('Status updated.', 'success');
-    };
+  const openEditModal = (u) => {
+  setEditUser(u);
 
+  setEuName(u.name || "");
+  setEuEmail(u.email || "");
+  setEuRole(u.role?.toLowerCase() || "citizen");
+  setEuConst(u.constituency || "");
+  setEuPass("");
+
+  // 🔥 IMPORTANT FIX (handle string/boolean)
+  setEuActive(u.active === true || u.active === "true");
+};
     const navLinks = [
         { type: 'label', label: 'Platform' },
         { id: 'overview', icon: '📊', label: 'Overview' },
@@ -101,7 +91,7 @@ export default function Admin() {
     ];
     const fetchAnnouncements = async () => {
   try {
-    const res = await fetch("http://localhost:3103/announcements");
+    const res = await fetch("https://backendfullstack-production.up.railway.app/announcements");
     const data = await res.json();
     setAnns(data);
   } catch (err) {
@@ -147,12 +137,12 @@ const clearAllData = async () => {
   if (!confirmDelete) return;
 
   try {
-    await fetch("http://localhost:3103/users/clear-all", {
+    await fetch("https://backendfullstack-production.up.railway.app/auth/users/clear-all", {
       method: "DELETE"
     });
 
     alert("All data cleared 💀");
-    fetchUsers(); // refresh UI
+    await refreshData(); // refresh UI
   } catch (err) {
     console.error(err);
     alert("Error clearing data ❌");
@@ -161,7 +151,7 @@ const clearAllData = async () => {
 const timeAgo = () => "Just now";
 const resetData = async () => {
   try {
-    await fetch("http://localhost:3103/users/reset", {
+    await fetch("https://backendfullstack-production.up.railway.app/users/reset", {
       method: "POST"
     });
 
@@ -178,16 +168,13 @@ const storageInfo = {
 };
     const fetchIssues = async () => {
   try {
-    const res = await fetch("http://localhost:3103/issues");
+    const res = await fetch("https://backendfullstack-production.up.railway.app/issues");
     const data = await res.json();
     setIssues(data);
   } catch (err) {
     console.error(err);
   }
 };
-useEffect(() => {
-  fetchIssues();
-}, []);
     // Overview Stats
     const open = issues.filter(i => i.status === 'open').length;
     const res = issues.filter(i => i.status === 'resolved').length;
@@ -202,24 +189,31 @@ useEffect(() => {
     const maxIS = Math.max(open, prog, res, 1);
 
     // Filtered Users
-    const filteredUsers = users.filter(u => {
-        if (userRoleFilter !== 'all' && u.role !== userRoleFilter) return false;
-        if (userSearch) {
-            const ls = userSearch.toLowerCase();
-            return u.name.toLowerCase().includes(ls) || u.email.toLowerCase().includes(ls);
-        }
-        return true;
-    });
+    const filteredUsers = (Array.isArray(users) ? users : []).filter(u => {
+    const role = u.role?.toLowerCase();
+    const filter = userRoleFilter?.toLowerCase();
+
+    if (filter !== 'all' && role !== filter) return false;
+
+    if (userSearch) {
+        const ls = userSearch.toLowerCase();
+        return (
+            u.name?.toLowerCase().includes(ls) ||
+            u.email?.toLowerCase().includes(ls)
+        );
+    }
+
+    return true;
+});
     // Data Stats
     const getStorageInfo = () => {
         let total = 0;
-        const keys = Object.values(DB_KEYS);
         const rows = keys.map(k => {
             const raw = localStorage.getItem(k) || '';
             total += raw.length;
             return { k, len: raw.length };
         });
-        return { rows, total };
+        return { rows:[], total };
     };
 
 
@@ -245,9 +239,6 @@ useEffect(() => {
 
   return true;
 });
-useEffect(() => {
-  fetchUsers();
-}, []);
 // 🔥 Calculate storage size of users data
 const calculateStorage = () => {
   if (!users || users.length === 0) return "0.00";
@@ -258,91 +249,189 @@ const calculateStorage = () => {
 
   return sizeInKB;
 };
-const fetchUsers = () => {
-  fetch("http://localhost:3103/users")
-    .then(res => res.json())
-    .then(data => {
-      console.log("Users:", data);
+ const fetchUsers = async () => {
+  try {
+    const res = await fetch("https://backendfullstack-production.up.railway.app/auth/users");
+    const data = await res.json();
+
+    console.log("Users:", data);
+
+    if (Array.isArray(data)) {
       setUsers(data);
-    });
+    } else {
+      setUsers([]);
+    }
+
+  } catch (err) {
+    console.error(err);
+    setUsers([]);
+  }
 };
 const handleCreateUser = async () => {
-  if (!auName || !auEmail || !auPass) {
+  if (!auName.trim() || !auEmail.trim() || !auPass.trim()) {
     alert("Please fill all required fields");
     return;
   }
 
-  const userData = {
-    name: auName,
-    email: auEmail,
-    password: auPass,
-    role: auRole.toUpperCase(),
-    wardNumber: parseInt(auWardNumber),
-    street: auStreet,
-    district: auDistrict,
-    state: auState,
-    pincode: parseInt(auPincode)
-  };
+  try {
+    const userData = {
+      name: auName.trim(),
+      email: auEmail.trim().toLowerCase(),
+      password: auPass,
+      role: auRole.toUpperCase(),
+      wardNumber: auWardNumber ? Number(auWardNumber) : null,
+      pincode: auPincode ? Number(auPincode) : null,
+      street: auStreet || "",
+      district: auDistrict || "",
+      state: auState || "",
+    };
 
-  await fetch("http://localhost:3103/users", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(userData)
-  });
+    const res = await fetch(
+      "https://backendfullstack-production.up.railway.app/auth/users",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(userData)
+      }
+    );
 
-  alert("User Created ✅");
+   const data = await res.json();
 
-  fetchUsers();
-  setShowAddUser(false); // close modal
+if (!res.ok) {
+  alert(data.message || "Failed to create user ❌");
+  return;
+}
+
+    alert("User Created ✅");
+
+    await refreshData();
+    setShowAddUser(false);
+    resetAddUserForm();
+
+  } catch (err) {
+    console.error(err);
+    alert("Server error ❌");
+  }
 };
 const deleteUser = async (id) => {
   const confirmDelete = window.confirm("Are you sure to delete this user?");
   if (!confirmDelete) return;
 
   try {
-    await fetch(`http://localhost:3103/users/${id}`, {
+    await fetch(`https://backendfullstack-production.up.railway.app/auth/users/${id}`, {
       method: "DELETE"
     });
 
     alert("User deleted successfully ✅");
-    fetchUsers(); // refresh table
+    await fetchUsers(); // refresh table
   } catch (err) {
     console.error(err);
     alert("Error deleting user ❌");
   }
 };
-const adminDeleteIssue = async (id) => {
-  await fetch(`http://localhost:3103/issues/${id}`, {
-    method: "DELETE"
-  });
-  fetchIssues();
+const saveProfile = async () => {
+  try {
+    const bodyData = {
+      name: profName,
+      street: profStreet,
+      district: profDistrict,
+      state: profState,
+      wardNumber: profWard ? Number(profWard) : null
+    };
+
+    // 🔥 ONLY send password if user typed it
+    if (profPass && profPass.trim() !== "") {
+      bodyData.password = profPass;
+    }
+
+    const res = await fetch(
+      `https://backendfullstack-production.up.railway.app/auth/users/${currentUser.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(bodyData)
+      }
+    );
+
+    const data = await res.json();
+
+    console.log("UPDATE RESPONSE:", data); // 🔍 DEBUG
+
+    if (!res.ok) {
+      alert(data.message || "Update failed ❌");
+      return;
+    }
+
+    // update state
+    const updatedUser = {
+      ...currentUser,
+      ...data
+    };
+
+    setCurrentUser(updatedUser);
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+
+    alert("Profile updated ✅");
+
+  } catch (err) {
+    console.error(err);
+    alert("Server error ❌");
+  }
 };
 const saveUser = async () => {
   try {
-    await fetch(`http://localhost:3103/users/${editUser.id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        name: euName,
-        email: euEmail,
-        role: euRole.toUpperCase(),
-        wardNumber: parseInt(auWardNumber),
-        street: auStreet,
-        district: auDistrict,
-        state: auState
-      })
-    });
+    const res = await fetch(
+      `https://backendfullstack-production.up.railway.app/auth/users/${editUser.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          name: euName,
+          email: euEmail,
+          role: euRole.toUpperCase(),
+          wardNumber: euWardNumber ? Number(euWardNumber) : null,
+          street: euStreet,
+          district: euDistrict,
+          state: euState
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.message || "Update failed ❌");
+      return;
+    }
 
     alert("User updated successfully ✅");
+
     setEditUser(null);
-    fetchUsers(); // refresh table
+    await fetchUsers();
+
   } catch (err) {
     console.error(err);
-    alert("Error updating user ❌");
+    alert("Server error ❌");
+  }
+};
+const adminDeleteIssue = async (id) => {
+  try {
+    await fetch(`https://backendfullstack-production.up.railway.app/issues/${id}`, {
+      method: "DELETE"
+    });
+
+    alert("Issue deleted ✅");
+    await fetchIssues();
+
+  } catch (err) {
+    console.error(err);
+    alert("Error deleting issue ❌");
   }
 };
 const resetAddUserForm = () => {
@@ -439,14 +528,22 @@ const resetAddUserForm = () => {
                             <p style={{ marginTop: '4px' }}>Manage accounts, roles, and access</p>
                         </div>
 
-                                                <button
-                        onClick={() => {
-                            resetAddUserForm();   // ✅ clear old data
-                            setShowAddUser(true);
-                        }}
-                        >
-                        ➕ Add User
-                        </button>
+                        <button
+  onClick={() => {
+    resetAddUserForm();
+    setShowAddUser(true);
+  }}
+  style={{
+    backgroundColor: "#3b82f6",
+    color: "white",
+    border: "none",
+    padding: "8px 14px",
+    borderRadius: "8px",
+    cursor: "pointer"
+  }}
+>
+  ➕ Add User
+</button>
                     </div>
                     <div className="filter-bar">
                         <div className="search-wrap" style={{ flex: 1 }}>
@@ -468,9 +565,7 @@ const resetAddUserForm = () => {
                                 <tr>
                                     <th>Name</th>
                                     <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Status</th>
-                                    <th>Joined</th>
+                                    <th>Role</th>   
                                     <th>WardNumber</th>
                                     <th>Street</th>
                                     <th>District</th>
@@ -480,7 +575,7 @@ const resetAddUserForm = () => {
                             </thead>
                             <tbody>
                                 {filteredUsers.length === 0 ? (
-                                    <tr><td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '32px' }}>No users found.</td></tr>
+                                    <tr><td colSpan="9" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '32px' }}>No users found.</td></tr>
                                 ) : (
                                     filteredUsers.map(u => (
                                         <tr key={u.id}>
@@ -499,19 +594,14 @@ const resetAddUserForm = () => {
 
                                     {/* Role */}
                                     <td>
-                                        <span className={`badge badge-${u.role}`}>
+                                        <span className={`badge badge-${u.role?.toLowerCase()}`}>
                                         {u.role}
                                         </span>
                                     </td>
 
                                     {/* Status */}
-                                    <td>
-                                        {u.active ? "Active" : "Inactive"}
-                                    </td>
-
-                                    {/* Joined */}
-                                    <td>{formatDate(u.joined)}</td>
-
+                                    
+                                  
                                     {/* Ward */}
                                     <td>{u.wardNumber || "-"}</td>
 
@@ -526,12 +616,7 @@ const resetAddUserForm = () => {
 
                                     {/* Actions */}
                                     <td>
-                                        <button
-                                        className="btn btn-secondary btn-xs"
-                                        onClick={() => openEditModal(u)}
-                                        >
-                                        ✏️
-                                        </button>
+                                        
 
                                         <button
                                         className="btn btn-danger btn-xs"
@@ -586,13 +671,7 @@ const resetAddUserForm = () => {
                                     <div className="issue-footer">
                                         <span className="issue-info">👤 {i.citizenName}</span>
                                         <span className="issue-info">📍 {i.constituency}</span>
-                                        <span className="issue-info">🕐 {timeAgo(i.timestamp)}</span>
                                         <button className="btn btn-danger btn-xs" onClick={() => adminDeleteIssue(i.id)}>🗑️ Delete</button>
-                                        <select className="form-control" style={{ width: 'auto', padding: '4px 8px', fontSize: '0.78rem' }} value={i.status} onChange={e => adminChangeStatus(i.id, e.target.value)}>
-                                            <option value="open">Open</option>
-                                            <option value="in-progress">In Progress</option>
-                                            <option value="resolved">Resolved</option>
-                                        </select>
                                     </div>
                                 </div>
                             ))
@@ -650,47 +729,6 @@ const resetAddUserForm = () => {
                     </div>
                 </section>
             )}
-
-            {/* Edit User Modal */}
-            {editUser && (
-                <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setEditUser(null); }}>
-                    <div className="modal">
-                        <div className="modal-header">
-                            <span className="modal-title">Edit: {editUser.name}</span>
-                            <button className="modal-close" onClick={() => setEditUser(null)}>✕</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="form-group"><label className="form-label">Full Name</label><input className="form-control" value={euName} onChange={e => setEuName(e.target.value)} /></div>
-                            <div className="form-group"><label className="form-label">Email</label><input className="form-control" type="email" value={euEmail} onChange={e => setEuEmail(e.target.value)} /></div>
-                            <div className="form-group">
-                                <label className="form-label">Role</label>
-                                <select className="form-control" value={euRole} onChange={e => setEuRole(e.target.value)}>
-                                    <option value="citizen">Citizen</option>
-                                    <option value="politician">Politician</option>
-                                    <option value="moderator">Moderator</option>
-                                    <option value="admin">Admin</option>
-                                </select>
-                            </div>
-
-                            <div className="form-group"><label className="form-label">Constituency</label><input className="form-control" value={euConst} onChange={e => setEuConst(e.target.value)} /></div>
-
-                            <div className="form-group">
-                                <label className="form-label">Status</label>
-                                <select className="form-control" value={euActive} onChange={e => setEuActive(e.target.value)}>
-                                    <option value="true">Active</option>
-                                    <option value="false">Deactivated</option>
-                                </select>
-                            </div>
-                            <div className="form-group"><label className="form-label">Reset Password</label><input className="form-control" type="password" placeholder="Leave blank to keep current" value={euPass} onChange={e => setEuPass(e.target.value)} /></div>
-                        </div>
-                        <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => setEditUser(null)}>Cancel</button>
-                            <button className="btn btn-primary" onClick={saveUser}>💾 Save Changes</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Add User Modal */}
             {showAddUser && (
                 <div className="modal-overlay open" onClick={(e) => {
@@ -726,10 +764,9 @@ const resetAddUserForm = () => {
         <div className="form-group">
           <label className="form-label">Role</label>
           <select className="form-control" value={auRole} onChange={e => setAuRole(e.target.value)}>
-            <option value="citizen">Citizen</option>
             <option value="politician">Politician</option>
             <option value="moderator">Moderator</option>
-            <option value="admin">Admin</option>
+         
           </select>
         </div>
         <div className="form-group">
